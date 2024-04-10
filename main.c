@@ -83,7 +83,7 @@ void print(struct word *current){
 
 /**
  * this function resets the value of the flag "usable" in each word beneath the word whose pointer is passed (included the passed word)
- * @param node
+ * @param node node to start from
  */
 void resetSubR(struct word *node){
     if(node->left != NULL) resetSubR(node->left);
@@ -109,7 +109,7 @@ int presentInVector(int vector[], int searched){
 
 /**
  * this function checks whether a player guess is present
- * @param word
+ * @param word player's guess
  * @return 0 if not present, 1 if present
  */
 int present(char *word){
