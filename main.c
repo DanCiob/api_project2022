@@ -6,20 +6,17 @@ int blockCount = 0;
 int wordSize;
 int usableBlocks;
 int j = 0, maxBlockCount;
-/*
- * this version outputs to stdin
- */
 
-/*
+
+/**
  * this program implements an optimized version of the game wordle; the data structure is based on a binary search tree; each node is made of a struct "word".
  */
 struct word *treeRoot = NULL ;
 
-/*
+/**
  * this struct represents a node of the bst containing all words needed for the game;
  * the short int "usable" is used as flag for whether the word is still valid for a match
  */
-
 struct word{
     struct word *left;
     struct word *right;
@@ -27,7 +24,7 @@ struct word{
     char word[10];
 };
 
-/*
+/**
  * this vector is used when the number of valid word in the match is lower than it's size; it is implemented as it is way faster
  * in cases of small games or of players which tend to not use hints; in such case the program would navigate the whole bst even if not needed, and in
  * case of high-word counts this would be expensive
@@ -37,12 +34,14 @@ struct word* fastVector[fastVectorLen];
 //flag for program
 int fastVectorUsage = 0;
 
-//TODO write description
+/**
+ * data structure used to keep information about the characters during a match
+ */
 struct map{
     char c;
     int count;
     int permaCount;
-    int mode;
+    int mode;    //mode 0 -> non-present in the secret word; mode 1 -> non-max ; mode 2 -> max num
 };
 
 struct map map[64];
@@ -309,8 +308,13 @@ void fastLaneCheck(char comparison[],char wordTested[],int side[],int noMap[][wo
     }
 }
 
-/*
+
+/**
  * this function checks, after the computation made by "wordCheck" which words are still usable after the given hint
+ * @param comparison result of computation from wordCheck
+ * @param wordTested user's guess
+ * @param side vector containing letters present in the right word guessed correctly from user
+ * @param noMap matrix[i][ii] containing 0 or 1 whether a letter (i, following mapFucntion numbering) should be in position ii
  */
 void usableCheck(char comparison[], char wordTested[], int side[], int noMap[][wordSize]){
     struct word *current = treeRoot, *temp;
@@ -397,7 +401,7 @@ void usableCheck(char comparison[], char wordTested[], int side[], int noMap[][w
                     i = 0;
                     ii = 0;
 
-                    //check for
+                    //check the observed word for cases of exact matches '+'
                     while(current->usable == 1 && ii < wordSize){
                         if(comparison[ii] == '+' && current->word[ii] != wordTested[ii]){
                             current->usable = 0;
@@ -406,10 +410,15 @@ void usableCheck(char comparison[], char wordTested[], int side[], int noMap[][w
                         ii++;
                     }
 
+                    //i must be minor than k because we need to check only for the number of letters contained in sideref
+                    //we check letter per letter (from sideref) every usable word in the tree
                     while(current->usable == 1 && i < k){
                         ii= 0;
 
+                        //depending on the mode of the observed letter we scan the observed word
                         switch(map[sideRef[i]].mode){
+
+                            //case 0 means that the letter doesn't exist in the word; any word containing it is no longer usable
                             case 0:
                                 c = map[sideRef[i]].c;
                                 while(current->usable == 1 && ii < wordSize){
@@ -420,6 +429,9 @@ void usableCheck(char comparison[], char wordTested[], int side[], int noMap[][w
                                     ii++;
                                 }
                                 break;
+
+                                //case 1 means that all words containing less than the hinted number of occurrences of a letter are no longer usable
+                                //also checking for words having the observed letter in the position marked with a '|'
                             case 1:
                                 c = map[sideRef[i]].c;
                                 while (current->usable == 1 && ii < wordSize) {
@@ -438,6 +450,9 @@ void usableCheck(char comparison[], char wordTested[], int side[], int noMap[][w
                                 }
                                 count = 0;
                                 break;
+
+                                //case 2 means that all words containing less or more than the hinted number of occurrences of a letter are no longer usable
+                                //also checking for words having the observed letter in the position marked with a '|' or '/'
                             case 2:
                                 c = map[sideRef[i]].c;
                                 while(current->usable == 1 && ii < wordSize) {
@@ -562,10 +577,14 @@ void usableCheck(char comparison[], char wordTested[], int side[], int noMap[][w
         i++;
     }
 }
-/*
- * this function prepares the comparison string written to output whenever a player makes a guess and the such guess is in the list of usable words
- * TODO explain what side and nomap do
- *
+
+/**
+ * function used to create the hint resulting from a user guess
+ * @param curr user's guess
+ * @param ref word to guess
+ * @param comp hint computed
+ * @param side vector containing letters present in the right word (@param ref) guessed correctly from user
+ * @param noMap matrix[i][ii] containing 0 or 1 whether a letter (i, following mapFucntion numbering) should be in position ii
  */
 void wordCheck(char *curr, char *ref,char *comp, int side[],int noMap[][wordSize]){
     register int  i,k,countRef,toPrint;
@@ -609,7 +628,7 @@ void wordCheck(char *curr, char *ref,char *comp, int side[],int noMap[][wordSize
              */
             k = 0;
             while(toPrint > 0 && k < wordSize){
-                if (curr[k] == curr[i] && comp[k] =='?'){           // printa '|' nelle posizioni necessarie toPrint volte
+                if (curr[k] == curr[i] && comp[k] =='?'){
                     comp[k] = '|';
                     toPrint--;
                 }
@@ -617,7 +636,7 @@ void wordCheck(char *curr, char *ref,char *comp, int side[],int noMap[][wordSize
             }
             //puts the "/" symbol where is needed
             if(toPrint == 0){
-                for (k = 0; k < wordSize; k++){                      //routine di print di '/'
+                for (k = 0; k < wordSize; k++){
                     if (comp[k] == '?' && curr[k] == curr[i]){
                         comp[k] = '/';
                     }
@@ -638,9 +657,11 @@ void wordCheck(char *curr, char *ref,char *comp, int side[],int noMap[][wordSize
 }
 
 
-/*
- * this function is used at start of the game or before the first move to insert new words; it allocates by block as allocating word by word makes more system calls
- * and could then be expensive
+
+/**
+ * this function is used at start of the game or before the first move to insert new words; it allocates by block as allocating word by word makes more system calls and could then be expensive
+ * @param breaker string needed from STDIN to stop the function
+ * @return 1 in case of error, 0 otherwise
  */
 int insertion(char *breaker){
     struct word *precedent = NULL, *current = treeRoot, *block;
@@ -705,8 +726,13 @@ int insertion(char *breaker){
     return 0;
 }
 
-/*
+
+/**
  * this function is used to insert words during a match; this is needed to not insert invalid (by that point in such match) in the list
+ * @param breaker string needed from STDIN to stop the function
+ * @param side vector containing letters present in the right word guessed correctly from user
+ * @param noMap matrix[i][ii] containing 0 or 1 whether a letter (i, following mapFucntion numbering) should be in position ii
+ * @return 1 in case of error, 0 otherwise
  */
 int midGameInsertion(char *breaker, int side[], int noMap[][wordSize]) {
     struct word *precedent = NULL, *current = treeRoot, *block = NULL;
@@ -724,6 +750,7 @@ int midGameInsertion(char *breaker, int side[], int noMap[][wordSize]) {
     if (fgets(new, wordSize + 1, stdin) == NULL) return 1;
     getchar();
 
+    //same code from insertion with modified code from usableCheck function
     while (strcmp(new, breaker) != 0) {
 
         if (blockCounter == (maxBlockCount / 5)) {
@@ -757,7 +784,6 @@ int midGameInsertion(char *breaker, int side[], int noMap[][wordSize]) {
         precedent = NULL;
         current = treeRoot;
 
-        //here
         k = 0;
         while (block->usable == 1 && k < wordSize) {
             c = block->word[k];
@@ -796,6 +822,7 @@ int midGameInsertion(char *breaker, int side[], int noMap[][wordSize]) {
             k++;
             ii = 0;
         }
+        //if still usable it is inserted
         if (block->usable == 1) {
             usableBlocks++;
             if(fastVectorUsage != 0){
@@ -815,8 +842,8 @@ int midGameInsertion(char *breaker, int side[], int noMap[][wordSize]) {
     return 0;
 }
 
-/*
- *function to reset values before a new game
+/**
+ * function to reset values before a new game
  */
 void resetValue(){
     int i;
@@ -833,8 +860,13 @@ void resetValue(){
     j = 0;
 }
 
-/*
+/**
  * main function which manages a game and the single turn
+ * @param insInit string to start insertion
+ * @param insFin string to end insertion
+ * @param stmFil string to write usable words
+ * @param initPar string to start match
+ * @return 0 if game is stopped, 1 if a new match starts
  */
 int gameRoutine(char *insInit, char *insFin, char *stmFil,char *initPar){
     register int attempts,first = 1,i,jj;
